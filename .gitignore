@@ -1,0 +1,18 @@
+# Maven
+target/
+*.class
+
+# IntelliJ
+.idea/
+*.iml
+
+# Environment / secrets
+application.yml
+application.properties
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Mac
+.DS_Store

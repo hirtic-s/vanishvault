@@ -1,0 +1,24 @@
+server:
+  port: 8080
+
+spring:
+  threads:
+    virtual:
+      enabled: true
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+aws:
+  access-key: YOUR_AWS_ACCESS_KEY
+  secret-key: YOUR_AWS_SECRET_KEY
+  region: ap-south-1
+  s3:
+    bucket-name: vanishvault-files
+  dynamodb:
+    table-name: vanishvault-files
+    logs-table-name: vanishvault-logs
+
+app:
+  base-url: http://localhost:5173
