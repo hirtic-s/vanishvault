@@ -16,7 +16,6 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/file")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class FileAccessController {
 
     private final S3Service s3Service;

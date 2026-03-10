@@ -20,7 +20,6 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class FileUploadController {
 
     private final S3Service s3Service;
