@@ -4,6 +4,8 @@ import axios from 'axios'
 import toast from 'react-hot-toast'
 import { Lock, Download, ShieldX } from 'lucide-react'
 
+const API = import.meta.env.VITE_API_URL
+
 export default function AccessPage() {
   const { fileId } = useParams()
   const [password, setPassword] = useState('')

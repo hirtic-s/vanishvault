@@ -39,7 +39,7 @@ export default function UploadPage() {
     form.append('burnAfterRead', burnAfterRead)
 
     try {
-      const { data } = await axios.post('/api/upload', form)
+      const { data } = await axios.post(`${import.meta.env.VITE_API_URL}/api/upload', form)
       setResult(data)
       toast.success('File uploaded successfully!')
     } catch {

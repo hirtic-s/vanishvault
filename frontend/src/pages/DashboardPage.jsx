@@ -25,7 +25,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const client = new Client({
-      webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+      webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL}/ws`),
       onConnect: () => {
         setConnected(true)
         client.subscribe(`/user/${SENDER_ID}/queue/alerts`, msg => {
@@ -44,7 +44,7 @@ export default function DashboardPage() {
 
   async function revokeFile(fileId) {
     try {
-      await axios.delete(`/api/file/${fileId}/revoke`)
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/file/${fileId}/revoke`)
       toast.success('File revoked!')
       setAlerts(prev => prev.filter(a => a.fileId !== fileId))
     } catch {
