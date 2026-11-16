@@ -1,62 +1,89 @@
-# Configuration
+# VanishVault
 
-## AWS resources
+**Share files that self-destruct. Password-protected, AES-256 encrypted, with expiry timers, download limits and burn-after-read.**
 
-Create these before starting the backend (names are configurable):
+![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.0-6DB33F?logo=springboot&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![AWS](https://img.shields.io/badge/AWS-S3_·_DynamoDB_·_SES-FF9900?logo=amazonwebservices&logoColor=white)
 
-| Resource | Name | Notes |
-|---|---|---|
-| S3 bucket | `vanishvault-files` | Stores encrypted file bytes under `uploads/{fileId}/{filename}` |
-| DynamoDB table | `vanishvault-files` | Partition key `fileId` (String) |
-| DynamoDB table | `vanishvault-logs` | Partition key `logId` (String), plus a global secondary index named `fileId-index` on `fileId` |
-| SES (optional) | | Verify a sender address and update the `source` in `EmailService` |
+<!-- Replace with a real screenshot or GIF of the upload flow and dashboard:
+![VanishVault screenshot](docs/screenshot.png)
+-->
 
-The IAM user needs `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` on the bucket and `dynamodb:PutItem`, `GetItem`, `UpdateItem`, `DeleteItem`, `Query` on both tables, plus `ses:SendEmail` if email alerts are used.
+## What it does
 
-## Backend (`src/main/resources/application.yml`)
+Upload a file, set a password, and get a shareable link plus QR code. The file is encrypted with a fresh AES-256 key before it reaches S3. The recipient enters the password to download; three wrong guesses destroy the file. Links expire after a time you choose, after a download limit, or immediately after the first download if burn-after-read is on.
 
-Copy `application.yml.example` and fill in:
+The sender's dashboard shows every access event live over WebSockets, and the sender can revoke a link at any time.
 
-| Key | Default | Description |
-|---|---|---|
-| `aws.access-key` | | IAM access key |
-| `aws.secret-key` | | IAM secret key |
-| `aws.region` | `ap-south-1` | AWS region |
-| `aws.s3.bucket-name` | `vanishvault-files` | S3 bucket |
-| `aws.dynamodb.table-name` | `vanishvault-files` | Metadata table |
-| `aws.dynamodb.logs-table-name` | `vanishvault-logs` | Access log table |
-| `app.base-url` | `http://localhost:5173` | Frontend origin used to build share links |
-| `server.port` | `8080` | |
-| `spring.servlet.multipart.max-file-size` | `100MB` | Upload size cap |
+## Features
 
-`application.yml` contains secrets and is git-ignored; only the `.example` file is committed.
+- AES-256 server-side encryption before storage in S3
+- Password protection with bcrypt hashing and a strength meter
+- Expiry timers (5 minutes to 24 hours), download limits and burn-after-read
+- Auto-destruct after three failed password attempts
+- Optional IP lock on a file
+- Live activity feed over STOMP/WebSocket: opened, wrong password, deleted
+- Optional email alerts via Amazon SES
+- Access logs per file in DynamoDB
+- Manual link revocation and QR code sharing
 
-## Frontend
+## Architecture
 
-| File | Variable | Value |
-|---|---|---|
-| `frontend/.env.development` | `VITE_API_URL` | `http://localhost:8080` |
-| `frontend/.env.production` | `VITE_API_URL` | Your deployed backend URL |
+```mermaid
+flowchart LR
+    U["Browser"] --> F["React frontend :5173"]
+    F -->|"REST + WebSocket"| B["Spring Boot backend :8080"]
+    B -->|"encrypted bytes"| S3[("S3")]
+    B -->|"metadata + logs"| DDB[("DynamoDB")]
+    B -->|"alerts"| SES["SES"]
+```
 
-In development, Vite also proxies `/api` to `http://localhost:8080`.
+**Stack:** Java 21, Spring Boot 4, Spring WebSocket (STOMP), Spring Security Crypto, AWS SDK v2 · React 19, Vite, Tailwind CSS 4, Axios · S3, DynamoDB, SES
 
-Allowed CORS origins are listed in `CorsConfig.java` (`http://localhost:5173` and the production frontend). Add yours there if you deploy elsewhere.
+## Quick start
 
-## Deployment
+Requires Java 21, Node 20+ and an AWS account with an S3 bucket and two DynamoDB tables (see [Configuration](docs/CONFIGURATION.md)).
 
-The project is set up for the backend on Railway and the frontend on Vercel. Set `app.base-url` to the Vercel URL, `VITE_API_URL` in `.env.production` to the Railway URL, and add the Vercel origin to `CorsConfig`.
+```bash
+git clone https://github.com/hirtic-s/VanishVault.git
+cd VanishVault
 
-## How access works
+# Backend
+cp src/main/resources/application.yml.example src/main/resources/application.yml
+# Edit application.yml: AWS keys, region, bucket and table names
+./mvnw spring-boot:run
 
-1. On upload, a random AES-256 key is generated, the file is encrypted, and the ciphertext goes to S3. The bcrypt password hash, the Base64 key, the TTL and the limits are saved in DynamoDB.
-2. On verify, the backend checks in order: TTL, IP lock, download limit, password. Any failure that should destroy the file deletes it from S3 and DynamoDB and notifies the sender.
-3. On a correct password, the ciphertext is fetched, decrypted in memory and streamed back. If burn-after-read is on, the file is deleted immediately after.
-4. Every check writes an access log row and pushes a STOMP message to `/user/{senderId}/queue/alerts`.
+# Frontend (new terminal)
+cd frontend
+npm install
+npm run dev
+```
 
-## Known limitations
+Open **http://localhost:5173**, pick a file, set a password and generate a link.
 
-- **No authentication.** `senderId` is a plain form field (the frontend hardcodes it), and revoke and log endpoints are open to anyone who knows a file ID.
-- **Key stored with metadata.** The AES key lives in DynamoDB next to the file record, so anyone with database access can decrypt files. A KMS-managed key would be the next step.
-- **Cipher mode.** `Cipher.getInstance("AES")` resolves to ECB with no IV. Switching to AES-GCM would add integrity and avoid pattern leakage in large files.
-- **Expiry is lazy.** Expired files are deleted only when someone tries to open them; enable DynamoDB TTL on the `ttl` attribute and an S3 lifecycle rule for true cleanup.
-- **IP detection** relies on the `X-Forwarded-For` header, which is only trustworthy behind a proxy you control.
+## Usage
+
+The UI covers the whole flow. The API can also be called directly:
+
+```bash
+# Upload (returns the share link)
+curl -X POST http://localhost:8080/api/upload \
+  -F file=@secret.pdf -F password=hunter22 -F senderId=me \
+  -F expiryMinutes=30 -F maxDownloads=1
+
+# Download with the password
+curl -X POST http://localhost:8080/api/file/<fileId>/verify \
+  -H "Content-Type: application/json" \
+  -d '{"password":"hunter22"}' -o secret.pdf
+```
+
+## Documentation
+
+- [API reference](docs/API.md) — endpoints, request and response shapes, WebSocket events
+- [Configuration](docs/CONFIGURATION.md) — AWS setup, environment, deployment, known limitations
+
+---
+
+Built by **Hirtic** · [GitHub](https://github.com/hirtic-s) · [hirtic.com](https://hirtic.com)
